@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Tracker</title>
+
+<!-- ── FIREBASE CONFIG ──────────────────────────────────────────────
+     SETUP INSTRUCTIONS (takes 3 minutes):
+     1. Go to https://console.firebase.google.com
+     2. Click "Add project" → name it "design-tracker" → Create
+     3. On the project homepage click "Realtime Database" in the left sidebar
+     4. Click "Create database" → choose any location → Start in TEST mode → Enable
+     5. Click "Project settings" (gear icon top left) → scroll to "Your apps"
+     6. Click the </> Web icon → register app (any nickname) → copy the firebaseConfig values
+     7. Paste them below replacing each placeholder
+     ──────────────────────────────────────────────────────────────── -->
+
+<script>
+  var FIREBASE_CONFIG = {
+    apiKey:            "PASTE_YOUR_apiKey_HERE",
+    authDomain:        "PASTE_YOUR_authDomain_HERE",
+    databaseURL:       "PASTE_YOUR_databaseURL_HERE",
+    projectId:         "PASTE_YOUR_projectId_HERE",
+    storageBucket:     "PASTE_YOUR_storageBucket_HERE",
+    messagingSenderId: "PASTE_YOUR_messagingSenderId_HERE",
+    appId:             "PASTE_YOUR_appId_HERE"
+  };
+</script>
+
+<!-- Firebase SDKs (compat / CDN) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Inter',system-ui,sans-serif;font-size:13px;color:#111827;background:#f4f5f7}
+body{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* ── SETUP BANNER ── */
+.setup-banner{background:#fef3c7;border-bottom:1px solid #fcd34d;padding:10px 20px;display:flex;align-items:center;gap:10px;font-size:12px;color:#92400e;flex-shrink:0}
+.setup-banner strong{font-weight:700}
+.setup-banner a{color:#92400e;font-weight:700}
+.setup-banner.hidden{display:none}
+.sb-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0}
+
+/* ── TOPBAR ── */
+.topbar{height:52px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 22px;gap:14px;flex-shrink:0}
+.logo{font-size:15px;font-weight:700;letter-spacing:-.4px;color:#111827}
+.logo span{color:#6366f1}
+.tdiv{width:1px;height:18px;background:#e5e7eb}
+.tsub{font-size:12px;color:#9ca3af}
+.tsp{flex:1}
+.live-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid #e5e7eb;color:#6b7280}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#d1d5db;flex-shrink:0;transition:background .3s}
+.live-dot.connected{background:#10b981;box-shadow:0 0 0 2px #d1fae5}
+.live-dot.connecting{background:#f59e0b;animation:blink 1s infinite}
+.live-dot.error{background:#ef4444}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.tmeta{font-size:12px;color:#9ca3af}
+.user-badge{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#374151;background:#f3f4f6;padding:5px 11px;border-radius:6px;cursor:pointer;border:none;font-family:'Inter',sans-serif}
+.user-badge:hover{background:#e5e7eb}
+.uav{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* ── FILTER BAR ── */
+.fbar{height:43px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:7px;padding:0 22px;flex-shrink:0;overflow-x:auto}
+.fbar::-webkit-scrollbar{display:none}
+.fpill{padding:4px 12px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;font-size:11px;font-weight:500;color:#6b7280;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif;transition:all .12s}
+.fpill:hover{border-color:#a5b4fc;color:#4338ca}
+.fpill.on{background:#eef2ff;border-color:#a5b4fc;color:#4338ca;font-weight:600}
+.fsep{width:1px;height:18px;background:#e5e7eb;flex-shrink:0}
+.fsp{flex:1}
+.srchwrap{position:relative;display:flex;align-items:center}
+.srchico{position:absolute;left:8px;color:#9ca3af;pointer-events:none}
+.srch{padding:5px 9px 5px 28px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;color:#111827;background:#f9fafb;width:180px}
+.srch:focus{outline:none;border-color:#a5b4fc;background:#fff}
+.hd-label{font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.hd-label input{accent-color:#6366f1;cursor:pointer}
+.addbtn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:6px;background:#6366f1;color:#fff;border:none;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.addbtn:hover{background:#4f46e5}
+.addbtn:active{transform:scale(.98)}
+
+/* ── TABLE ── */
+.tbl-wrap{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:920px}
+col.c0{width:34px}col.c1{width:250px}col.c2{width:90px}col.c3{width:118px}
+col.c4{width:84px}col.c5{width:120px}col.c6{width:100px}col.c7{width:74px}
+col.c8{width:72px}col.c9{width:64px}col.c10{width:100px}col.c11{width:80px}col.c12{width:46px}
+
+thead{position:sticky;top:0;z-index:20}
+thead tr{background:#f9fafb}
+thead th{padding:9px 11px;text-align:left;font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;border-right:1px solid #f3f4f6;white-space:nowrap}
+thead th:last-child{border-right:none}
+
+tbody tr{background:#fff;border-bottom:1px solid #f3f4f6;transition:background .08s}
+tbody tr:hover td{background:#fafafe}
+tbody tr.is-done td{opacity:.5}
+tbody tr.flash-new td{animation:flash .8s ease}
+@keyframes flash{0%{background:#eef2ff}100%{background:#fff}}
+
+td{padding:0;border-right:1px solid #f9fafb;vertical-align:middle}
+td:last-child{border-right:none}
+
+.ci{padding:8px 11px;display:flex;align-items:center;min-height:38px;cursor:pointer;position:relative}
+.ci:hover::after{content:'✎';position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:9px;color:#c7d2fe;pointer-events:none}
+td.noedit .ci{cursor:default}
+td.noedit .ci:hover::after{display:none}
+.ct{font-size:13px;font-weight:500;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.rnum{font-size:11px;color:#d1d5db;width:100%;text-align:center}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;line-height:1.5}
+.c-requirement{background:#fef3c7;color:#92400e}
+.c-inprogress{background:#dbeafe;color:#1e40af}
+.c-review1{background:#ede9fe;color:#5b21b6}
+.c-review2{background:#fce7f3;color:#9d174d}
+.c-done{background:#d1fae5;color:#065f46}
+.c-high{background:#fee2e2;color:#991b1b}
+.c-medium{background:#fef9c3;color:#854d0e}
+.c-low{background:#d1fae5;color:#065f46}
+.c-marketing{background:#fce7f3;color:#9d174d}
+.c-product{background:#ede9fe;color:#4c1d95}
+.c-clear{background:#d1fae5;color:#065f46}
+.c-vague{background:#fef3c7;color:#92400e}
+
+.vflag{font-size:9px;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;padding:1px 5px;border-radius:3px;margin-left:6px;flex-shrink:0}
+.av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0}
+.etd-ok{color:#059669;font-weight:600;font-size:12px}
+.etd-ov{color:#dc2626;font-weight:600;font-size:12px}
+.etd-n{color:#6b7280;font-size:12px}
+.due-ov{color:#dc2626;font-weight:600;font-size:12px}
+.due-ok{color:#374151;font-size:12px}
+
+/* inline edit */
+td.editing{box-shadow:inset 0 0 0 2px #6366f1;z-index:10;position:relative;background:#fff}
+td.editing .ci{display:none}
+.iewrap{display:none}
+td.editing .iewrap{display:flex;align-items:stretch}
+input.ie,select.ie{width:100%;border:none;background:transparent;font-size:13px;font-family:'Inter',sans-serif;color:#111827;padding:8px 11px;outline:none;min-height:38px;font-weight:500}
+select.ie{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%236366f1'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:24px}
+
+/* add row */
+.addrowtr td{padding:0;border-bottom:none}
+.addrowbtn{width:100%;padding:10px 14px;background:none;border:none;font-size:12px;font-weight:500;color:#9ca3af;text-align:left;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:7px}
+.addrowbtn:hover{color:#6366f1;background:#fafafe}
+.plusico{width:16px;height:16px;border-radius:3px;border:1.5px dashed #d1d5db;display:flex;align-items:center;justify-content:center;font-size:11px;color:#9ca3af;flex-shrink:0}
+
+/* row action */
+.rowact{display:flex;align-items:center;justify-content:center;padding:4px}
+.ibtn{background:none;border:none;cursor:pointer;padding:3px 5px;border-radius:3px;color:#d1d5db;font-size:13px;line-height:1;font-family:'Inter',sans-serif}
+.ibtn:hover{background:#f3f4f6;color:#6366f1}
+.ibtn.del:hover{background:#fee2e2;color:#dc2626}
+
+/* empty */
+.empty{text-align:center;padding:72px 20px}
+.empty-ico{width:58px;height:58px;border-radius:14px;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.empty-title{font-size:15px;font-weight:600;margin-bottom:6px}
+.empty-sub{font-size:12px;color:#9ca3af;max-width:320px;margin:0 auto 20px;line-height:1.6}
+
+/* modal */
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:#fff;border-radius:10px;width:500px;max-width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.18)}
+.mhead{padding:16px 18px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.mtitle{font-size:14px;font-weight:700}
+.mbody{padding:18px;overflow-y:auto;flex:1}
+.mfoot{padding:12px 18px;border-top:1px solid #f3f4f6;display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+.xbtn{background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;line-height:1}.xbtn:hover{color:#374151}
+.fg{margin-bottom:13px}.fg:last-child{margin-bottom:0}
+.fl{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.req{color:#ef4444}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input.mi,select.mi,textarea.mi{width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;color:#111827;background:#fff}
+input.mi:focus,select.mi:focus,textarea.mi:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.08)}
+select.mi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%239ca3af'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px}
+textarea.mi{resize:vertical;min-height:62px}
+.mbtnp{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:6px;background:#6366f1;color:#fff;border:none;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer}
+.mbtnp:hover{background:#4f46e5}
+.mbtng{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:6px;background:#fff;color:#374151;border:1px solid #e5e7eb;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer}
+.mbtng:hover{background:#f9fafb}
+
+/* name modal */
+.name-modal{background:#fff;border-radius:10px;width:380px;max-width:100%;padding:28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.18)}
+.nm-title{font-size:16px;font-weight:700;margin-bottom:6px}
+.nm-sub{font-size:13px;color:#9ca3af;margin-bottom:18px;line-height:1.5}
+
+/* toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(8px);background:#111827;color:#fff;padding:9px 18px;border-radius:8px;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;z-index:300;opacity:0;transition:all .22s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{background:#059669}
+.toast.info{background:#6366f1}
+.toast.warn{background:#d97706}
+
+/* online users */
+.online-users{display:flex;align-items:center;gap:4px}
+.ou-av{width:24px;height:24px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;margin-left:-6px}
+.ou-av:first-child{margin-left:0}
+.ou-count{font-size:11px;color:#9ca3af;margin-left:4px}
+</style>
+</head>
+<body>
+
+<!-- SETUP BANNER (shown until Firebase is configured) -->
+<div class="setup-banner" id="setup-banner">
+  <div class="sb-dot"></div>
+  <div><strong>Firebase not configured yet.</strong> Open this file in a text editor, find the FIREBASE_CONFIG section at the top, and paste your Firebase project credentials. <a href="https://console.firebase.google.com" target="_blank">Go to Firebase Console →</a></div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">Design<span>Tracker</span></div>
+  <div class="tdiv"></div>
+  <div class="tsub">Live · editable by everyone</div>
+  <div class="tsp"></div>
+  <div class="online-users" id="online-users"></div>
+  <div class="live-badge">
+    <div class="live-dot connecting" id="live-dot"></div>
+    <span id="live-label">Connecting…</span>
+  </div>
+  <div class="tdiv"></div>
+  <div class="tmeta" id="tmeta"></div>
+  <button class="user-badge" id="user-badge" onclick="promptName()" title="Change your name">
+    <div class="uav" id="user-av" style="background:#6366f1">?</div>
+    <span id="user-name-label">Set your name</span>
+  </button>
+</div>
+
+<!-- FILTER BAR -->
+<div class="fbar">
+  <div id="tpills" style="display:flex;gap:4px">
+    <button class="fpill on" onclick="sf('team','',this)">All teams</button>
+    <button class="fpill" onclick="sf('team','marketing',this)">Marketing</button>
+    <button class="fpill" onclick="sf('team','product',this)">Product</button>
+  </div>
+  <div class="fsep"></div>
+  <div id="spills" style="display:flex;gap:4px">
+    <button class="fpill on" onclick="sf('status','',this)">All</button>
+    <button class="fpill" onclick="sf('status','requirement',this)">Requirement</button>
+    <button class="fpill" onclick="sf('status','inprogress',this)">In progress</button>
+    <button class="fpill" onclick="sf('status','review1',this)">Review 1</button>
+    <button class="fpill" onclick="sf('status','review2',this)">Review 2</button>
+    <button class="fpill" onclick="sf('status','done',this)">Done</button>
+  </div>
+  <div class="fsep"></div>
+  <div id="ppills" style="display:flex;gap:4px">
+    <button class="fpill on" onclick="sf('pri','',this)">All priorities</button>
+    <button class="fpill" onclick="sf('pri','high',this)">High</button>
+    <button class="fpill" onclick="sf('pri','medium',this)">Medium</button>
+    <button class="fpill" onclick="sf('pri','low',this)">Low</button>
+  </div>
+  <div class="fsp"></div>
+  <div class="srchwrap">
+    <svg class="srchico" width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.2"/><path d="M8 8l2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+    <input class="srch" type="text" id="f-search" placeholder="Search…" oninput="render()">
+  </div>
+  <div class="fsep"></div>
+  <label class="hd-label"><input type="checkbox" id="hide-done" onchange="render()"> Hide done</label>
+  <div class="fsep"></div>
+  <button class="addbtn" onclick="openModal()">
+    <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+    New task
+  </button>
+</div>
+
+<!-- TABLE -->
+<div class="tbl-wrap">
+  <table>
+    <colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"><col class="c6"><col class="c7"><col class="c8"><col class="c9"><col class="c10"><col class="c11"><col class="c12"></colgroup>
+    <thead>
+      <tr>
+        <th></th><th>Task</th><th>Team</th><th>Type</th><th>Priority</th>
+        <th>Status</th><th>Due date</th><th>ETD</th><th>Spent</th>
+        <th>Revs</th><th>Assigned to</th><th>Clarity</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<!-- NEW TASK MODAL -->
+<div class="mbg" id="modal" style="display:none" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead"><div class="mtitle">New design task</div><button class="xbtn" onclick="closeModal()">×</button></div>
+    <div class="mbody">
+      <div class="fg"><label class="fl">Task title <span class="req">*</span></label><input class="mi" type="text" id="nt-title" placeholder="e.g. Diwali homepage banner"></div>
+      <div class="g2">
+        <div class="fg" style="margin-bottom:0"><label class="fl">Team <span class="req">*</span></label>
+          <select class="mi" id="nt-team" onchange="syncTypes()"><option value="">Select…</option><option value="marketing">Marketing</option><option value="product">Product</option></select></div>
+        <div class="fg" style="margin-bottom:0"><label class="fl">Type <span class="req">*</span></label>
+          <select class="mi" id="nt-type"><option value="">Select team first</option></select></div>
+      </div>
+      <div class="g2" style="margin-top:12px">
+        <div class="fg" style="margin-bottom:0"><label class="fl">Priority</label>
+          <select class="mi" id="nt-pri"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></div>
+        <div class="fg" style="margin-bottom:0"><label class="fl">Assigned to</label>
+          <select class="mi" id="nt-assignee"><option value="">Unassigned</option><option>Shivani</option><option>Tamonash</option></select></div>
+      </div>
+      <div class="g2" style="margin-top:12px">
+        <div class="fg" style="margin-bottom:0"><label class="fl">Due date</label><input class="mi" type="date" id="nt-due"></div>
+        <div class="fg" style="margin-bottom:0"><label class="fl">ETD (days)</label><input class="mi" type="number" id="nt-etd" placeholder="e.g. 3" min="0.5" step="0.5"></div>
+      </div>
+      <div class="fg" style="margin-top:12px"><label class="fl">Requirement clarity</label>
+        <select class="mi" id="nt-clarity"><option value="clear">Clear — ready to start</option><option value="vague">Vague — needs more info</option></select></div>
+      <div class="fg"><label class="fl">Brief / reference link</label><input class="mi" type="url" id="nt-brief" placeholder="https://…"></div>
+      <div class="fg"><label class="fl">Notes</label><textarea class="mi" id="nt-notes" placeholder="Stakeholder requirements, context…"></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="mbtng" onclick="closeModal()">Cancel</button>
+      <button class="mbtnp" onclick="createTask()">Add task</button>
+    </div>
+  </div>
+</div>
+
+<!-- NAME MODAL -->
+<div class="mbg" id="name-modal" style="display:none">
+  <div class="name-modal">
+    <div class="nm-title">Who are you?</div>
+    <div class="nm-sub">Enter your name so teammates can see who is online and who made changes.</div>
+    <input class="mi" type="text" id="nm-input" placeholder="Your name" style="margin-bottom:12px;text-align:center" maxlength="30">
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="mbtnp" onclick="saveName()" style="width:100%">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────
+var STATUSES  = ['requirement','inprogress','review1','review2','done'];
+var SLABEL    = {requirement:'Requirement',inprogress:'In progress',review1:'Review 1',review2:'Review 2',done:'Done'};
+var MKTYPES   = [{v:'social',l:'Social post'},{v:'blog',l:'Blog image'},{v:'web',l:'Web layout'},{v:'uichange',l:'UI change'}];
+var PTYPES    = [{v:'feature',l:'New feature'},{v:'redesign',l:'Redesign'},{v:'portal',l:'Portal page'},{v:'ideation',l:'Ideation'},{v:'bug',l:'Bug fix'}];
+var TLABEL    = {social:'Social post',blog:'Blog image',web:'Web layout',uichange:'UI change',feature:'New feature',redesign:'Redesign',portal:'Portal page',ideation:'Ideation',bug:'Bug fix'};
+var ASSIGNEES = ['Shivani','Tamonash'];
+var AVCOL     = {Shivani:'#6366f1',Tamonash:'#10b981'};
+var USERCOLS  = ['#6366f1','#10b981','#f59e0b','#ec4899','#3b82f6','#8b5cf6','#ef4444','#14b8a6'];
+
+// ── STATE ─────────────────────────────────────────────────────────
+var tasks     = {};
+var filters   = {team:'',status:'',pri:''};
+var editCell  = null;
+var myName    = localStorage.getItem('dt-name') || '';
+var myId      = localStorage.getItem('dt-uid')  || generateId();
+var myColor   = USERCOLS[Math.abs(hashStr(myId)) % USERCOLS.length];
+var db        = null;
+var isConfigured = false;
+var newTaskIds = new Set();
+
+localStorage.setItem('dt-uid', myId);
+
+// ── CHECK CONFIG ──────────────────────────────────────────────────
+function checkConfig() {
+  var cfg = FIREBASE_CONFIG;
+  isConfigured = cfg.apiKey && cfg.apiKey !== 'PASTE_YOUR_apiKey_HERE' && cfg.databaseURL && cfg.databaseURL !== 'PASTE_YOUR_databaseURL_HERE';
+  if (!isConfigured) {
+    document.getElementById('setup-banner').classList.remove('hidden');
+    setLive('error', 'Not configured');
+    renderOffline();
+    return false;
+  }
+  document.getElementById('setup-banner').classList.add('hidden');
+  return true;
+}
+
+// ── FIREBASE INIT ─────────────────────────────────────────────────
+function initFirebase() {
+  if (!checkConfig()) return;
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+
+    // Connection state
+    db.ref('.info/connected').on('value', function(snap) {
+      if (snap.val()) {
+        setLive('connected', 'Live');
+        registerPresence();
+      } else {
+        setLive('connecting', 'Reconnecting…');
+      }
+    });
+
+    // Listen to tasks
+    db.ref('tasks').on('value', function(snap) {
+      var data = snap.val() || {};
+      var prevIds = new Set(Object.keys(tasks));
+      tasks = data;
+      var currIds = new Set(Object.keys(tasks));
+      // detect new tasks added by others
+      currIds.forEach(function(id) {
+        if (!prevIds.has(id) && !newTaskIds.has(id)) {
+          newTaskIds.add(id);
+          setTimeout(function(){ newTaskIds.delete(id); }, 2000);
+        }
+      });
+      render();
+    });
+
+    // Listen to presence
+    db.ref('presence').on('value', function(snap) {
+      renderOnlineUsers(snap.val() || {});
+    });
+
+  } catch(e) {
+    setLive('error', 'Error');
+    toast('Firebase error: ' + e.message, '');
+  }
+}
+
+// ── PRESENCE ─────────────────────────────────────────────────────
+function registerPresence() {
+  if (!db || !myName) return;
+  var ref = db.ref('presence/' + myId);
+  ref.set({name: myName, color: myColor, ts: Date.now()});
+  ref.onDisconnect().remove();
+  // heartbeat
+  setInterval(function(){
+    if (myName) ref.update({ts: Date.now()});
+  }, 30000);
+}
+
+function renderOnlineUsers(presence) {
+  var container = document.getElementById('online-users');
+  var users = Object.values(presence).filter(function(u){ return Date.now() - u.ts < 120000; });
+  if (users.length === 0) { container.innerHTML = ''; return; }
+  var html = users.slice(0,5).map(function(u) {
+    return '<div class="ou-av" style="background:'+u.color+'" title="'+esc(u.name)+'">'+ini(u.name)+'</div>';
+  }).join('');
+  if (users.length > 1) html += '<span class="ou-count">'+users.length+' online</span>';
+  container.innerHTML = html;
+}
+
+// ── PRESENCE NAME ─────────────────────────────────────────────────
+function initName() {
+  if (!myName) {
+    document.getElementById('name-modal').style.display = 'flex';
+  } else {
+    updateNameBadge();
+  }
+}
+
+function saveName() {
+  var val = (document.getElementById('nm-input').value || '').trim();
+  if (!val) { toast('Please enter your name', ''); return; }
+  myName = val;
+  localStorage.setItem('dt-name', myName);
+  document.getElementById('name-modal').style.display = 'none';
+  updateNameBadge();
+  registerPresence();
+}
+
+function promptName() {
+  document.getElementById('nm-input').value = myName || '';
+  document.getElementById('name-modal').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('nm-input').focus(); }, 50);
+}
+
+function updateNameBadge() {
+  document.getElementById('user-name-label').textContent = myName || 'Set name';
+  document.getElementById('user-av').textContent = myName ? ini(myName) : '?';
+  document.getElementById('user-av').style.background = myColor;
+}
+
+// ── OFFLINE RENDER (no firebase) ──────────────────────────────────
+function renderOffline() {
+  var tbody = document.getElementById('tbody');
+  tbody.innerHTML = '<tr><td colspan="13" style="border:none"><div class="empty"><div class="empty-ico">'+
+    '<svg width="26" height="26" viewBox="0 0 26 26" fill="none"><rect x="3" y="3" width="20" height="21" rx="3" stroke="#6366f1" stroke-width="1.4"/><path d="M8 9h10M8 13h10M8 17h6" stroke="#6366f1" stroke-width="1.2" stroke-linecap="round"/></svg></div>'+
+    '<div class="empty-title">Firebase not configured</div>'+
+    '<div class="empty-sub">Add your Firebase credentials at the top of this file to enable live collaboration. See the setup instructions in the yellow banner above.</div>'+
+    '</div></td></tr>';
+}
+
+// ── FILTERS ───────────────────────────────────────────────────────
+function sf(key, val, btn) {
+  filters[key] = val;
+  btn.parentElement.querySelectorAll('.fpill').forEach(function(p){ p.classList.remove('on'); });
+  btn.classList.add('on');
+  render();
+}
+
+function getFiltered() {
+  var s  = document.getElementById('f-search').value.toLowerCase();
+  var hd = document.getElementById('hide-done').checked;
+  return Object.values(tasks)
+    .sort(function(a,b){ return (a.order||0) - (b.order||0) || a.created.localeCompare(b.created); })
+    .filter(function(t) {
+      if (filters.team   && t.team   !== filters.team)   return false;
+      if (filters.status && t.status !== filters.status) return false;
+      if (filters.pri    && t.pri    !== filters.pri)    return false;
+      if (hd && t.status === 'done') return false;
+      if (s && t.title.toLowerCase().indexOf(s) === -1 && (t.assignee||'').toLowerCase().indexOf(s) === -1) return false;
+      return true;
+    });
+}
+
+// ── RENDER ────────────────────────────────────────────────────────
+function render() {
+  if (!isConfigured) return;
+  var list  = getFiltered();
+  var tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  var taskCount = Object.keys(tasks).length;
+
+  if (taskCount === 0) {
+    var etr = document.createElement('tr');
+    etr.innerHTML = '<td colspan="13" style="border:none"><div class="empty">'+
+      '<div class="empty-ico"><svg width="26" height="26" viewBox="0 0 26 26" fill="none"><rect x="3" y="3" width="20" height="21" rx="3" stroke="#6366f1" stroke-width="1.4"/><path d="M8 9h10M8 13h10M8 17h6" stroke="#6366f1" stroke-width="1.2" stroke-linecap="round"/><circle cx="21" cy="21" r="4" fill="#6366f1"/><path d="M19.5 21h3M21 19.5v3" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/></svg></div>'+
+      '<div class="empty-title">No tasks yet</div>'+
+      '<div class="empty-sub">Add your first task. It will instantly appear for everyone on the team with no refresh needed.</div>'+
+      '<button class="addbtn" onclick="openModal()" style="font-size:13px;padding:8px 18px;margin:0 auto">+ Add first task</button>'+
+      '</div></td>';
+    tbody.appendChild(etr);
+  } else if (list.length === 0) {
+    var etr2 = document.createElement('tr');
+    etr2.innerHTML = '<td colspan="13" style="border:none"><div class="empty" style="padding:48px 20px"><div class="empty-title" style="font-size:14px">No tasks match filters</div><div class="empty-sub">Try adjusting the filters above.</div></div></td>';
+    tbody.appendChild(etr2);
+  } else {
+    list.forEach(function(t, i) {
+      var tr = document.createElement('tr');
+      if (t.status === 'done') tr.classList.add('is-done');
+      if (newTaskIds.has(t.id)) tr.classList.add('flash-new');
+
+      var dL = dLeft(t.due);
+      var ov = t.due && dL < 0 && t.status !== 'done';
+      var etdOv = t.etd > 0 && t.spent > t.etd;
+      var dueTxt, dueCls;
+      if (!t.due)  { dueTxt='—'; dueCls='etd-n'; }
+      else if (ov) { dueTxt='Overdue '+Math.abs(dL)+'d'; dueCls='due-ov'; }
+      else         { dueTxt=fmtDate(t.due); dueCls='due-ok'; }
+
+      var avHtml = t.assignee
+        ? '<div class="av" style="background:'+(AVCOL[t.assignee]||'#6b7280')+'">'+ini(t.assignee)+'</div><span style="font-size:12px;margin-left:4px;color:#111827">'+t.assignee+'</span>'
+        : '<span style="color:#d1d5db">—</span>';
+
+      var vflag = (t.clarity==='vague'&&t.status!=='done') ? '<span class="vflag">⚠</span>' : '';
+
+      tr.innerHTML =
+        '<td class="noedit"><div class="ci"><div class="rnum">'+(i+1)+'</div></div></td>'+
+        etd(t.id,'title','<div class="ct">'+esc(t.title)+vflag+'</div>')+
+        etd(t.id,'team','<span class="chip c-'+t.team+'">'+cap(t.team)+'</span>')+
+        etd(t.id,'type','<span style="font-size:12px;color:#6b7280">'+esc(TLABEL[t.type]||'—')+'</span>')+
+        etd(t.id,'pri','<span class="chip c-'+t.pri+'">'+cap(t.pri)+'</span>')+
+        etd(t.id,'status','<span class="chip c-'+t.status+'">'+SLABEL[t.status]+'</span>')+
+        etd(t.id,'due','<span class="'+dueCls+'">'+dueTxt+'</span>')+
+        etd(t.id,'etd','<span class="etd-n">'+(t.etd?t.etd+'d':'—')+'</span>')+
+        etd(t.id,'spent','<span class="'+(etdOv?'etd-ov':t.spent>0?'etd-ok':'etd-n')+'">'+(t.spent>0?t.spent+'d':'—')+'</span>')+
+        etd(t.id,'revisions','<span style="font-size:12px;color:#374151">'+t.revisions+'</span>')+
+        etd(t.id,'assignee','<div style="display:flex;align-items:center">'+avHtml+'</div>')+
+        etd(t.id,'clarity','<span class="chip c-'+t.clarity+'">'+cap(t.clarity)+'</span>')+
+        '<td class="noedit"><div class="rowact"><button class="ibtn del" onclick="delTask(\''+t.id+'\')">✕</button></div></td>';
+
+      tbody.appendChild(tr);
+    });
+
+    var addTr = document.createElement('tr');
+    addTr.className = 'addrowtr';
+    addTr.innerHTML = '<td colspan="13"><button class="addrowbtn" onclick="openModal()"><div class="plusico">+</div>Add task</button></td>';
+    tbody.appendChild(addTr);
+  }
+
+  var done = Object.values(tasks).filter(function(t){return t.status==='done';}).length;
+  document.getElementById('tmeta').textContent = taskCount + ' task' + (taskCount !== 1 ? 's' : '') + (taskCount ? ' · '+done+' done' : '');
+
+  // re-attach edit listeners
+  document.querySelectorAll('td[data-field]').forEach(function(td){
+    td.querySelector('.ci').addEventListener('click', function(){ activateCell(td); });
+  });
+}
+
+function etd(id, field, html) {
+  return '<td data-id="'+id+'" data-field="'+field+'" class="editable"><div class="ci">'+html+'</div><div class="iewrap"></div></td>';
+}
+
+// ── INLINE EDIT ───────────────────────────────────────────────────
+function activateCell(td) {
+  commitEdit();
+  var id = td.dataset.id, field = td.dataset.field;
+  var t = tasks[id];
+  if (!t) return;
+  editCell = {id, field};
+  td.classList.add('editing');
+  var wrap = td.querySelector('.iewrap');
+  var el;
+
+  if (field==='title')      { el=mi(); el.type='text'; el.value=t.title; }
+  else if (field==='team')  { el=ms(); opts(el,['marketing','product'],cap,t.team); }
+  else if (field==='type')  { el=ms(); (t.team==='marketing'?MKTYPES:PTYPES).forEach(function(o){ao(el,o.v,o.l,t.type===o.v);}); }
+  else if (field==='pri')   { el=ms(); opts(el,['high','medium','low'],cap,t.pri); }
+  else if (field==='status'){ el=ms(); STATUSES.forEach(function(s){ao(el,s,SLABEL[s],t.status===s);}); }
+  else if (field==='due')   { el=mi(); el.type='date'; el.value=t.due||''; }
+  else if (field==='etd')   { el=mi(); el.type='number'; el.step='0.5'; el.min='0'; el.value=t.etd||''; }
+  else if (field==='spent') { el=mi(); el.type='number'; el.step='0.5'; el.min='0'; el.value=t.spent||''; }
+  else if (field==='revisions'){ el=mi(); el.type='number'; el.step='1'; el.min='0'; el.value=t.revisions||0; }
+  else if (field==='assignee'){ el=ms(); ao(el,'','Unassigned',!t.assignee); ASSIGNEES.forEach(function(a){ao(el,a,a,t.assignee===a);}); }
+  else if (field==='clarity'){ el=ms(); [{v:'clear',l:'Clear'},{v:'vague',l:'Vague'}].forEach(function(o){ao(el,o.v,o.l,t.clarity===o.v);}); }
+
+  if (!el) { editCell=null; return; }
+  el.className = 'ie';
+  wrap.appendChild(el);
+  el.focus();
+  if (el.type==='text') el.select();
+
+  el.addEventListener('blur', function(){ setTimeout(commitEdit, 120); });
+  el.addEventListener('keydown', function(e){
+    if (e.key==='Enter' && el.tagName!=='SELECT') { e.preventDefault(); commitEdit(); }
+    if (e.key==='Escape') { editCell=null; render(); }
+    if (e.key==='Tab')    { e.preventDefault(); commitEdit(); }
+  });
+  if (el.tagName==='SELECT') el.addEventListener('change', commitEdit);
+}
+
+function commitEdit() {
+  if (!editCell) return;
+  var id = editCell.id, field = editCell.field;
+  editCell = null;
+  var t = tasks[id];
+  var td = document.querySelector('td[data-id="'+id+'"][data-field="'+field+'"]');
+  if (!t || !td) { render(); return; }
+  var el = td.querySelector('.ie');
+  if (!el) { render(); return; }
+  var val = el.value;
+  var update = {};
+
+  if (field==='title')     { if(val.trim()) update.title=val.trim(); }
+  else if (field==='team') { if(val!==t.team){ update.team=val; update.type=(val==='marketing'?MKTYPES:PTYPES)[0].v; } }
+  else if (field==='type') { update.type=val; }
+  else if (field==='pri')  { update.pri=val; }
+  else if (field==='status') {
+    update.status=val;
+    if ((val==='review1'||val==='review2') && val!==t.status) update.revisions=(t.revisions||0)+1;
+  }
+  else if (field==='due')       { update.due=val; }
+  else if (field==='etd')       { update.etd=parseFloat(val)||0; }
+  else if (field==='spent')     { update.spent=parseFloat(val)||0; }
+  else if (field==='revisions') { update.revisions=parseInt(val)||0; }
+  else if (field==='assignee')  { update.assignee=val; }
+  else if (field==='clarity')   { update.clarity=val; }
+
+  if (Object.keys(update).length && db) {
+    db.ref('tasks/'+id).update(update);
+  }
+  render();
+}
+
+document.addEventListener('mousedown', function(e) {
+  if (!editCell) return;
+  var ed = document.querySelector('td.editing');
+  if (ed && !ed.contains(e.target)) commitEdit();
+});
+
+// ── MODAL ─────────────────────────────────────────────────────────
+function openModal()  { document.getElementById('modal').style.display='flex'; setTimeout(function(){document.getElementById('nt-title').focus();},50); }
+function closeModal() { document.getElementById('modal').style.display='none'; }
+
+function syncTypes() {
+  var team = document.getElementById('nt-team').value;
+  var sel  = document.getElementById('nt-type');
+  var list = team==='marketing'?MKTYPES:team==='product'?PTYPES:[];
+  sel.innerHTML = list.length ? list.map(function(o){return '<option value="'+o.v+'">'+o.l+'</option>';}).join('') : '<option value="">Select team first</option>';
+}
+
+function createTask() {
+  var title = (document.getElementById('nt-title').value||'').trim();
+  var team  = document.getElementById('nt-team').value;
+  var type  = document.getElementById('nt-type').value;
+  if (!title){ toast('Enter a task title',''); return; }
+  if (!team) { toast('Select a team',''); return; }
+  if (!type) { toast('Select a task type',''); return; }
+  if (!db)   { toast('Not connected to Firebase',''); return; }
+
+  var id = generateId();
+  var order = Date.now();
+  var task = {
+    id, title, team, type,
+    pri:      document.getElementById('nt-pri').value,
+    status:   'requirement',
+    due:      document.getElementById('nt-due').value || '',
+    etd:      parseFloat(document.getElementById('nt-etd').value) || 0,
+    spent:    0,
+    assignee: document.getElementById('nt-assignee').value,
+    brief:    document.getElementById('nt-brief').value.trim(),
+    notes:    document.getElementById('nt-notes').value.trim(),
+    clarity:  document.getElementById('nt-clarity').value,
+    revisions:0,
+    createdBy: myName || 'Unknown',
+    created:  new Date().toISOString(),
+    order
+  };
+
+  newTaskIds.add(id);
+  db.ref('tasks/'+id).set(task);
+
+  closeModal();
+  ['nt-title','nt-brief','nt-notes','nt-etd','nt-due'].forEach(function(i){document.getElementById(i).value='';});
+  document.getElementById('nt-team').value=''; syncTypes();
+  document.getElementById('nt-pri').value='medium';
+  document.getElementById('nt-clarity').value='clear';
+  toast('Task added ✓','ok');
+}
+
+document.getElementById('nt-title').addEventListener('keydown', function(e){ if(e.key==='Enter') createTask(); });
+document.getElementById('nm-input').addEventListener('keydown', function(e){ if(e.key==='Enter') saveName(); });
+
+function delTask(id) {
+  if (!confirm('Delete this task? This cannot be undone.')) return;
+  if (db) db.ref('tasks/'+id).remove();
+  toast('Task deleted','');
+}
+
+// ── STATUS + UTILS ────────────────────────────────────────────────
+function setLive(state, label) {
+  var dot = document.getElementById('live-dot');
+  var lbl = document.getElementById('live-label');
+  dot.className = 'live-dot ' + state;
+  lbl.textContent = label;
+}
+
+function mi(){ var e=document.createElement('input'); return e; }
+function ms(){ return document.createElement('select'); }
+function ao(sel,val,label,selected){ var o=document.createElement('option'); o.value=val; o.textContent=label; if(selected)o.selected=true; sel.appendChild(o); }
+function opts(sel,vals,labelFn,cur){ vals.forEach(function(v){ ao(sel,v,labelFn(v),v===cur); }); }
+function esc(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):''; }
+function ini(n){ return(n||'').split(' ').map(function(w){return w[0]||'';}).join('').toUpperCase().slice(0,2); }
+function dLeft(d){ if(!d)return 99; var a=new Date(d),b=new Date(); a.setHours(0,0,0,0); b.setHours(0,0,0,0); return Math.round((a-b)/86400000); }
+function fmtDate(d){ if(!d)return'—'; var p=d.split('T')[0].split('-'); var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return p[2]+' '+m[+p[1]-1]+' '+p[0]; }
+function generateId(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+function hashStr(s){ var h=0; for(var i=0;i<s.length;i++){ h=((h<<5)-h)+s.charCodeAt(i); h|=0; } return h; }
+function toast(msg,cls){ var el=document.getElementById('toast'); el.textContent=msg; el.className='toast '+(cls||''); el.classList.add('show'); setTimeout(function(){el.classList.remove('show');},2500); }
+
+// ── INIT ──────────────────────────────────────────────────────────
+initFirebase();
+initName();
+</script>
+</body>
+</html>
